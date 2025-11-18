@@ -1,0 +1,63 @@
+# Docker Compose for SpeedTestPro Local Development
+version: '3.8'
+
+services:
+  # Backend Service
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: speedtestpro-backend
+    ports:
+      - "8080:8080"
+    environment:
+      - SERVER_ID=docker-01
+      - SERVER_NAME=Docker Local
+      - SERVER_IP=localhost
+      - BIND_HOST=0.0.0.0
+      - BIND_PORT=8080
+      - RUST_LOG=info
+      - DATABASE_PATH=/app/data/speedtest.db
+      - DEFAULT_TEST_DURATION_MS=10000
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  # Frontend Service
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: speedtestpro-frontend
+    ports:
+      - "80:80"
+    environment:
+      - VITE_API_BASE_URL=http://localhost:8080
+      - VITE_WS_BASE_URL=ws://localhost:8080
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+volumes:
+  data:
+    driver: local
+  logs:
+    driver: local
+
+networks:
+  default:
+    name: speedtestpro-network
